@@ -1,37 +1,37 @@
 # ImageHosting
 
-## Erstinstallation
+## Initial Installation
 
-1. **Beispiel-Konfigurationen kopieren** (im Verzeichnis `config/`):
-   - `config/secret.sample.php` nach `config/secret.php` kopieren.
-   - `config/admin_ids_example.txt` nach `config/admin_ids.txt` kopieren (oder die vorhandene Datei überschreiben).
+1. **Copy Example Config** (in Folder `config/`):
+   - copy `config/secret.sample.php` to `config/secret.php` 
+   - copy `config/admin_ids_example.txt` to `config/admin_ids.txt`
 
-   Beispiel:
+   Example:
 
    ```bash
    cp config/secret.sample.php config/secret.php
    cp config/admin_ids_example.txt config/admin_ids.txt
    ```
 
-2. **Secrets setzen** in `config/secret.php`:
-   - `admin_hmac_secret`: Langer, zufälliger String (32+ Zeichen).
-   - `admin_login_token`: Token für das Admin-Login-Formular.
+2. **Set Secrets** in `config/secret.php`:
+   - `admin_hmac_secret`: long, random String (32+ Characters).
+   - `admin_login_token`: Token used for the admin login form.
 
-3. **Admin-IDs pflegen** in `config/admin_ids.txt`:
-   - Eine Benutzer-ID (`ih_uid`) pro Zeile.
-   - Kommentare sind mit `#` möglich.
+3. **Set Admin-IDs** in `config/admin_ids.txt`:
+   - One User-ID (`ih_uid`) per line.
+   - comments are possible -use `#`
 
-> Hinweis: `config/admin_ids.txt` und `config/secret.php` sind sensibel und sollten nur vom Betreiber lesbar sein.
+> Important: `config/admin_ids.txt` and `config/secret.php` contain sensitive data and should only be readable by the operator.
 
 ## Admin-Panel
 
-1. **Login aufrufen:** Öffne `/admin_login.php`.
-2. **Admin-Token eingeben:** Verwende das `admin_login_token` aus `config/secret.php`.
-3. **Weiterleitung:** Nach erfolgreichem Login wirst du nach `/admin.php` (Admin-Panel) weitergeleitet.
+1. **Open login page:** Access `/admin_login.php`.
+2. **Enter Admin-Token:** Use `admin_login_token` from `config/secret.php`.
+3. **Redirect:** After successful login, you will be redirected to `/admin.php` (Admin-Panel).
 
-Das Admin-Panel ist nur zugänglich, wenn **beides** stimmt:
-1. Die anonyme User-ID (`ih_uid`) steht in `config/admin_ids.txt`.
-2. Das gültige `ih_admin`-Cookie wurde über `/admin_login.php` gesetzt.
+Access to the admin panel is granted only if **both conditions** are met:
+1. The anonymous User-ID (`ih_uid`) is present in `config/admin_ids.txt`.
+2. The valid `ih_admin`-Cookie cookie has been set via `/admin_login.php`.
 
 ## Security hardening notes
 
