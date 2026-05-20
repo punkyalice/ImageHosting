@@ -2,9 +2,9 @@
 
 ## Initial Installation
 
-1. **Copy Example Config** (in Folder `config/`):
-   - copy `config/secret.sample.php` to `config/secret.php` 
-   - copy `config/admin_ids_example.txt` to `config/admin_ids.txt`
+1. **Copy Example Config** (in the `config/` folder):
+   - Copy `config/secret.sample.php` to `config/secret.php`
+   - Copy `config/admin_ids_example.txt` to `config/admin_ids.txt`
 
    Example:
 
@@ -14,32 +14,43 @@
    ```
 
 2. **Set Secrets** in `config/secret.php`:
-   - `admin_hmac_secret`: long, random String (32+ Characters).
-   - `admin_login_token`: Token used for the admin login form.
+   - `admin_hmac_secret`: long, random string (32+ characters).
+   - `admin_login_token`: token used for the admin login form.
 
-3. **Set Admin-IDs** in `config/admin_ids.txt`:
-   - One User-ID (`ih_uid`) per line.
-   - comments are possible -use `#`
+3. **Set Admin IDs** in `config/admin_ids.txt`:
+   - One user ID (`ih_uid`) per line.
+   - Comments are supported — use `#`.
 
 > Important: `config/admin_ids.txt` and `config/secret.php` contain sensitive data and should only be readable by the operator.
 
-## Admin-Panel
+## Admin Panel
 
-1. **Open login page:** Access `/admin_login.php`.
-2. **Enter Admin-Token:** Use `admin_login_token` from `config/secret.php`.
-3. **Redirect:** After successful login, you will be redirected to `/admin.php` (Admin-Panel).
+1. **Open the login page:** Access `/admin_login.php`.
+2. **Enter the admin token:** Use the `admin_login_token` from `config/secret.php`.
+3. **Redirect:** After a successful login, you will be redirected to `/admin.php` (Admin Panel).
 
 Access to the admin panel is granted only if **both conditions** are met:
-1. The anonymous User-ID (`ih_uid`) is present in `config/admin_ids.txt`.
-2. The valid `ih_admin`-Cookie cookie has been set via `/admin_login.php`.
+1. The anonymous user ID (`ih_uid`) is present in `config/admin_ids.txt`.
+2. A valid `ih_admin` cookie has been set via `/admin_login.php`.
 
-## Security hardening notes
+## Security Hardening
 
-### Storage execution hardening
+### Storage Execution Hardening
 
-Apache users should keep the bundled `public/storage/.htaccess` in place to disable PHP execution in the storage directory.
+Apache users should keep the bundled `public/storage/.htaccess` in place to disable PHP execution in the storage directory:
 
-For nginx, add a deny rule to the storage location in your vhost (example):
+```apache
+php_flag engine off
+RemoveHandler .php .phtml .phar .php3 .php4 .php5 .php7 .php8
+SetHandler None
+Options -ExecCGI
+
+<FilesMatch "\.(php|phtml|phar|php[0-9])$">
+    Require all denied
+</FilesMatch>
+```
+
+For nginx, add a deny rule to the storage location in your vhost:
 
 ```nginx
 location ~* ^/storage/.*\.(php|phtml|phar|php[0-9])$ {
@@ -48,13 +59,86 @@ location ~* ^/storage/.*\.(php|phtml|phar|php[0-9])$ {
 }
 ```
 
-### Admin authentication setup
+### Admin Authentication Setup
 
 Create `config/secret.php` based on `config/secret.sample.php` and set strong values for `admin_hmac_secret` and `admin_login_token`. Keep `config/admin_ids.txt` populated with admin user IDs (one per line).
 
-Admins must authenticate via `/admin_login.php` using the Admin Token to mint an `ih_admin` cookie. Admin access is granted only when both `ih_uid` and `ih_admin` are valid.
+Admins must authenticate via `/admin_login.php` using the admin token to mint an `ih_admin` cookie. Admin access is granted only when both `ih_uid` and `ih_admin` are valid.
 
-## Self-tests / curl examples
+### Security Headers
+
+Set the `X-Content-Type-Options: nosniff` header to prevent MIME sniffing in the event of misconfiguration.
+
+**Apache (global or vHost):**
+
+```apache
+Header always set X-Content-Type-Options "nosniff"
+```
+
+Optional — limit to `/storage` only:
+
+```apache
+<Location "/storage/">
+    Header always set X-Content-Type-Options "nosniff"
+</Location>
+```
+
+**Nginx:**
+
+```nginx
+add_header X-Content-Type-Options "nosniff" always;
+```
+
+Optional — limit to `/storage` only:
+
+```nginx
+location /storage/ {
+  add_header X-Content-Type-Options "nosniff" always;
+}
+```
+
+### Directory Structure & Permissions
+
+The application requires write access for upload metadata, logs, rate limits, and served files:
+
+- `data/uploads/` — upload metadata
+- `public/storage/` — served image files
+- `storage/logs/` — application logs
+- `storage/ratelimit/` — rate limit state
+
+Recommended permissions (adjust to your web server user):
+
+```bash
+chown -R www-data:www-data data public/storage storage
+chmod 750 data public/storage storage
+chmod 770 storage/logs storage/ratelimit
+```
+
+> Important: `public/storage/` must never execute PHP.
+
+### PHP Settings (Recommended)
+
+- `upload_max_filesize = 10M` (matches `IH_MAX_BYTES_PER_FILE`)
+- `post_max_size = 50M` (matches `IH_MAX_BYTES_TOTAL`)
+- `max_file_uploads = 20` (matches `IH_MAX_FILES_PER_REQUEST`)
+- `memory_limit = 128M` (sufficient for MIME detection without unnecessary overhead)
+- `display_errors = Off` (production — no internal details exposed)
+
+## Security Model
+
+- The anonymous user ID (`ih_uid`) is the access key (no password, no recovery).
+- Capability links (`/v.php?id=...`, `/u.php?id=...`) grant access independent of the user.
+- Uploads bound to a `user_id` are only visible/deletable by that user or an admin.
+- TTL is enforced server-side; expired uploads are no longer retrievable.
+
+## Known Limitations / Non-Goals
+
+- No IP bans or IP blocklists.
+- No content scanning (e.g. SVG or script analysis beyond the allowlist).
+- No malware/AV scanning.
+- No abuse automation or moderation workflow.
+
+## Self-Tests / curl Examples
 
 Blocked MIME (SVG should fail):
 
@@ -100,121 +184,12 @@ curl -s -X POST \
   http://localhost:8000/api/upload.php
 ```
 
-## Security & Betrieb
+## Pre-Launch Security Checklist
 
-### Ordnerstruktur & Berechtigungen
-
-Die Anwendung benötigt Schreibrechte für Upload-Metadaten, Logs, Rate-Limits und ausgelieferte Dateien:
-
-- `data/uploads/` (Upload-Metadaten)
-- `public/storage/` (ausgelieferte Bilddateien)
-- `storage/logs/` (App-Logs)
-- `storage/ratelimit/` (Rate-Limit-Zustand)
-
-Empfohlene Rechte (Beispiel, an Webserver-User anpassen):
-
-```bash
-chown -R www-data:www-data data public/storage storage
-chmod 750 data public/storage storage
-chmod 770 storage/logs storage/ratelimit
-```
-
-### Webserver-Härtung
-
-**Apache**: PHP-Ausführung im Storage deaktivieren (mitgeliefertes Beispiel in `public/storage/.htaccess`):
-
-```apache
-php_flag engine off
-RemoveHandler .php .phtml .phar .php3 .php4 .php5 .php7 .php8
-SetHandler None
-Options -ExecCGI
-
-<FilesMatch "\.(php|phtml|phar|php[0-9])$">
-    Require all denied
-</FilesMatch>
-```
-
-**Nginx**: PHP-Ausführung im Storage explizit blockieren:
-
-```nginx
-location ~* ^/storage/.*\.(php|phtml|phar|php[0-9])$ {
-  deny all;
-  return 403;
-}
-```
-
-**Wichtig:** `public/storage/` darf niemals PHP ausführen.
-
-### Security Headers
-
-Setze zusätzlich `X-Content-Type-Options: nosniff`, um MIME-Sniffing bei Fehlkonfigurationen zu verhindern.
-
-**Apache (global oder vHost)**:
-
-```apache
-Header always set X-Content-Type-Options "nosniff"
-```
-
-Optional nur für `/storage`:
-
-```apache
-<Location "/storage/">
-    Header always set X-Content-Type-Options "nosniff"
-</Location>
-```
-
-**Nginx**:
-
-```nginx
-add_header X-Content-Type-Options "nosniff" always;
-```
-
-Optional nur für `/storage`:
-
-```nginx
-location /storage/ {
-  add_header X-Content-Type-Options "nosniff" always;
-}
-```
-
-### PHP-Einstellungen (empfohlen)
-
-- `upload_max_filesize = 10M` (passt zu `IH_MAX_BYTES_PER_FILE`)
-- `post_max_size = 50M` (passt zu `IH_MAX_BYTES_TOTAL`)
-- `max_file_uploads = 20` (passt zu `IH_MAX_FILES_PER_REQUEST`)
-- `memory_limit = 128M` (ausreichend für MIME-Erkennung ohne unnötige Überbelegung)
-- `display_errors = Off` (Produktion, keine internen Details)
-
-### Admin-Setup
-
-- Datei mit Admin-IDs: `config/admin_ids.txt` (eine ID pro Zeile, Kommentare mit `#` erlaubt)
-- Admin-ID hinzufügen: eigene `ih_uid`-ID in `config/admin_ids.txt` eintragen
-- Admin-Secret konfigurieren: `config/secret.php` basierend auf `config/secret.sample.php`
-  - `admin_hmac_secret` (HMAC-Key für `ih_admin`-Cookie)
-  - `admin_login_token` (Login-Token für `/admin_login.php`)
-
-**Hinweis:** Admin-IDs sind sensibel, Datei nur für den Betreiber lesbar halten.
-
-### Sicherheitsmodell (kurz)
-
-- Die anonyme User-ID (`ih_uid`) ist der Zugriffsschlüssel (kein Passwort, keine Recovery).
-- Capability-Links (`/v.php?id=...`, `/u.php?id=...`) erlauben Zugriff unabhängig vom User.
-- Uploads mit gebundenem `user_id` sind nur für diesen User oder Admin sichtbar/löschbar.
-- TTL wird serverseitig enforced; abgelaufene Uploads sind nicht mehr abrufbar.
-
-### Known Limitations / Non-Goals
-
-- Keine IP-Sperren oder IP-Blocklisten.
-- Kein Content-Scanning (z. B. SVG- oder Script-Analyse außerhalb der Allowlist).
-- Kein Malware-/AV-Scanning.
-- Keine Abuse-Automation oder Moderations-Workflow.
-
-### Minimaler Security-Check vor Go-Live
-
-1. **Test:** SVG-Upload wird abgelehnt (`415/400` je nach Client) und nicht gespeichert.
-2. **Test:** >10MB Datei liefert `413 file_too_large`.
-3. **Test:** >20 Dateien liefern `413 too_many_files`.
-4. **Test:** Upload-Rate-Limit greift (HTTP `429`).
-5. **Test:** `/api/admin_uploads.php` ohne Admin-Cookie liefert `403`.
-6. **Test:** Fremdes Upload-Delete liefert `403`.
-7. **Test:** Direkter Zugriff auf `/storage/*.php` liefert `403`.
+1. SVG uploads are rejected (`415`/`400` depending on client) and not stored.
+2. Files larger than 10 MB return `413 file_too_large`.
+3. More than 20 files return `413 too_many_files`.
+4. Upload rate limiting is active (HTTP `429`).
+5. `/api/admin_uploads.php` without an admin cookie returns `403`.
+6. Deleting another user's upload returns `403`.
+7. Direct access to `/storage/*.php` returns `403`.
